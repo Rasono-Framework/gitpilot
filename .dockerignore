@@ -1,0 +1,30 @@
+# Keep the image lean — never bake secrets or local-only files.
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+.venv
+venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+.coverage
+htmlcov
+*.db
+*.db-shm
+*.db-wal
+.idea
+.vscode
+.DS_Store
+
+# Documentation that isn't needed at runtime.
+*.md
+LICENSE
+
+# Docker & CI artifacts (we ARE the Dockerfile, not its build context meta).
+Dockerfile
+docker-compose*.yml
+.github
