@@ -2,7 +2,7 @@
   <img src="docs/assets/gitpilot-banner.png" alt="gitpilot banner" width="960">
 </p>
 
-<h1 align="center">gitpilot</h1>
+<h1 align="center">GITPILOT</h1>
 
 <p align="center">
   Backend FastAPI async pour piloter GitHub via une GitHub App, avec support SQL optionnel et mode stateless.
