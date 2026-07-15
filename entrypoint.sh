@@ -4,7 +4,7 @@
 # Responsibilities:
 #   1. Sanity-check that the required env vars are present.
 #   2. Tighten .env file permissions if the user mounted it loosely.
-#   3. Initialize the database schema.
+#   3. Apply Alembic migrations when SQL state is enabled.
 #   4. Start the FastAPI service.
 #
 # Why we don't `source` the .env file: bash parsing can't represent a

@@ -4,6 +4,67 @@
 
 ---
 
+## [2026-07-15T21:48:06Z] | Stabilisation Alembic, boot SQL strict et doc open source
+
+- **Contexte :**
+  Le backend etait fonctionnel, mais le schema SQL restait trop implicite :
+  creation au boot applicatif, pas de source de verite unique pour les
+  migrations, et tests encore partiellement dependants de l'environnement
+  local. L'objectif etait de prioriser la stabilite, reduire les derives
+  dev/prod et rendre le flux Docker/test plus deterministic.
+
+- **Modifications effectuees :**
+  - `src/api_db.py` — suppression du bootstrap DDL implicite au profit d'une
+    verification explicite du schema (`alembic_version` + `operations`).
+  - `src/api_app.py` — demarrage SQL en mode fail-fast si les migrations ne
+    sont pas appliquees ; ajout de l'alias `GET /v1/users/{user}/repos`.
+  - `alembic.ini`, `migrations/env.py`, `migrations/script.py.mako`,
+    `migrations/versions/20260715_01_create_operations_table.py` — ajout de
+    l'infrastructure Alembic complete avec revision initiale pour `operations`.
+  - `tests/api_smoke_test.py` — test rendu auto-suffisant : variables GitHub
+    minimales injectees en environnement et migrations appliquees avant le
+    boot de l'app.
+  - `tests/stateless_api_smoke_test.py` — suppression d'une dependance
+    implicite au `.env` local via l'injection d'une config GitHub minimale.
+  - `Dockerfile` — copie des assets Alembic (`migrations/`, `alembic.ini`)
+    dans l'image runtime.
+  - `entrypoint.sh` — commentaire de responsabilite aligne sur l'application
+    de migrations.
+  - `README.md` — ajout d'une tete de README type open source, documentation
+    du flux Alembic, de l'alias user, d'un onboarding GitHub App structure
+    avec liens officiels, et suppression des exemples lies a une organisation
+    specifique.
+
+- **Decisions Techniques :**
+  - **Schema fail-fast plutot que `create_all()` au boot** : un backend qui
+    cree ses tables implicitement peut diverger de la prod et masquer des
+    migrations manquantes. Le service refuse maintenant de demarrer si le
+    schema attendu n'existe pas.
+  - **Alembic comme source unique du schema** : evite les derives SQLite /
+    PostgreSQL, aligne dev/test/prod et simplifie les audits de changement.
+  - **Tests auto-contenus** : les smoke tests ne doivent pas dependre des
+    credentials ou du `.env` du poste, sinon ils donnent une illusion de
+    stabilite non reproductible.
+  - **Docker runtime avec migrations embarquees** : sans les scripts Alembic
+    dans l'image, `init-db` casse au boot et le conteneur n'est pas portable.
+
+- **Impacts & Dependances :**
+  - En mode `STATE_BACKEND=sql`, `python -m src.server init-db` doit etre
+    execute avant le premier `serve`.
+  - Le conteneur respecte maintenant le meme flux que le runtime local :
+    `entrypoint.sh` applique les migrations puis lance l'API.
+  - Le README attend une image de banniere locale en
+    `docs/assets/gitpilot-banner.png` pour afficher le visuel du projet en
+    tete de page.
+
+- **Prochaines étapes :**
+  - Valider le flux Docker complet build/run/health avec les scripts Alembic
+    embarques.
+  - Si le schema evolue, generer les futures revisions Alembic plutot que
+    modifier directement les modeles sans migration associee.
+
+---
+
 ## 2026-07-15 | Stabilisation runtime, owners generiques et mode sans etat
 
 - **Contexte :**

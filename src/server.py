@@ -3,38 +3,40 @@
 from __future__ import annotations
 
 import argparse
-import asyncio
 
 import uvicorn
 
-from .api_db import Database
 from .config import load_config
+from .migrations import current_revision, upgrade_to_head
 
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="github-api-server")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("serve", help="Run the FastAPI server")
-    sub.add_parser("init-db", help="Create the database schema")
+    sub.add_parser("init-db", help="Apply Alembic migrations up to head")
+    sub.add_parser("db-current", help="Show the current Alembic revision")
     return parser
 
 
-async def _init_db() -> int:
+def _init_db() -> int:
     config = load_config()
-    if config.state_backend != "sql":
-        return 0
-    db = Database(config)
-    try:
-        await db.create_schema()
-    finally:
-        await db.dispose()
+    upgrade_to_head(config)
+    return 0
+
+
+def _db_current() -> int:
+    config = load_config()
+    current_revision(config, verbose=True)
     return 0
 
 
 def main(argv: list[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
     if args.command == "init-db":
-        return asyncio.run(_init_db())
+        return _init_db()
+    if args.command == "db-current":
+        return _db_current()
 
     config = load_config()
     uvicorn.run(

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
 import sys
 from pathlib import Path
@@ -15,8 +16,13 @@ os.environ.setdefault("API_AUTH_TOKEN", "test-api-token")
 os.environ.setdefault("DATABASE_URL", "sqlite:///./test_api_smoke.db")
 os.environ.setdefault("QUEUE_WORKERS", "2")
 os.environ.setdefault("STATE_BACKEND", "sql")
+os.environ.setdefault("GITHUB_APP_ID", "test-app-id")
+os.environ.setdefault("GITHUB_PRIVATE_KEY", "-----BEGIN RSA PRIVATE KEY-----\nTEST\n-----END RSA PRIVATE KEY-----")
+os.environ.setdefault("GITHUB_INSTALLATION_ID", "123456")
 
 from src.api_app import create_app  # noqa: E402
+from src.config import load_config  # noqa: E402
+from src.migrations import upgrade_to_head  # noqa: E402
 from src.api_service import GitHubOperationService  # noqa: E402
 
 
@@ -48,6 +54,7 @@ class FakeGitHub:
 
 
 async def main() -> int:
+    await asyncio.to_thread(upgrade_to_head, load_config())
     app = create_app()
     async with app.router.lifespan_context(app):
         app.state.github = FakeGitHub()
@@ -115,4 +122,4 @@ async def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(__import__("asyncio").run(main()))
+    raise SystemExit(asyncio.run(main()))

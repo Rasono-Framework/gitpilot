@@ -48,7 +48,7 @@ def _operation_response(record: OperationView) -> OperationResponse:
     )
 
 
-def _accepted(record: OperationRecord) -> OperationAccepted:
+def _accepted(record: OperationView) -> OperationAccepted:
     return OperationAccepted(
         operation_id=record.id,
         status=OperationStatus(record.status),
@@ -86,7 +86,10 @@ async def lifespan(app: FastAPI):
     session_factory = None
     if config.state_backend == "sql":
         db = Database(config)
-        await db.create_schema()
+        if not await db.has_schema():
+            raise RuntimeError(
+                "SQL schema is not initialized. Run 'python -m src.server init-db' before starting the API."
+            )
         session_factory = db.session_factory
 
     limits = httpx.Limits(
@@ -178,6 +181,10 @@ def create_app() -> FastAPI:
     @secured.get("/orgs/{org}/repos", response_model=list[RepoSummary], tags=["repos"])
     async def list_org_repos(org: str, request: Request, limit: int = 30) -> list[RepoSummary]:
         return await list_repos(org, request, owner_type="org", limit=limit)
+
+    @secured.get("/users/{user}/repos", response_model=list[RepoSummary], tags=["repos"])
+    async def list_user_repos(user: str, request: Request, limit: int = 30) -> list[RepoSummary]:
+        return await list_repos(user, request, owner_type="user", limit=limit)
 
     @secured.get("/operations", response_model=list[OperationResponse], tags=["operations"])
     async def list_operations(request: Request, limit: int = 100) -> list[OperationResponse]:

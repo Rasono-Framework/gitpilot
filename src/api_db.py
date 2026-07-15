@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 
-from sqlalchemy import event, text
+from sqlalchemy import event, inspect, text
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -12,7 +12,6 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
-from .api_models import Base
 from .config import Config
 
 
@@ -54,9 +53,18 @@ class Database:
 
         return engine
 
-    async def create_schema(self) -> None:
-        async with self.engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
+    async def has_schema(self) -> bool:
+        try:
+            async with self.engine.connect() as conn:
+                return await conn.run_sync(self._has_schema_sync)
+        except Exception:  # noqa: BLE001
+            return False
+
+    @staticmethod
+    def _has_schema_sync(connection) -> bool:  # noqa: ANN001
+        inspector = inspect(connection)
+        tables = set(inspector.get_table_names())
+        return {"alembic_version", "operations"}.issubset(tables)
 
     async def session(self) -> AsyncIterator[AsyncSession]:
         async with self.session_factory() as session:

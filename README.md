@@ -1,4 +1,19 @@
-# gitpilot
+<p align="center">
+  <img src="docs/assets/gitpilot-banner.png" alt="gitpilot banner" width="960">
+</p>
+
+<h1 align="center">gitpilot</h1>
+
+<p align="center">
+  Backend FastAPI async pour piloter GitHub via une GitHub App, avec support SQL optionnel et mode stateless.
+</p>
+
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
+  <a href="CONTRIBUTING.md"><img src="https://img.shields.io/badge/contributions-welcome-brightgreen.svg" alt="Contributions welcome"></a>
+  <img src="https://img.shields.io/badge/runtime-FastAPI-009688.svg" alt="FastAPI">
+  <img src="https://img.shields.io/badge/storage-SQLite%20%7C%20PostgreSQL%20%7C%20None-5865F2.svg" alt="Storage backends">
+</p>
 
 gitpilot est un backend FastAPI async pour piloter GitHub via une GitHub App.
 
@@ -42,17 +57,19 @@ Le projet garde aussi le CLI historique, mais le point d'entree principal est ma
 - [github_async.py](file:///Users/user/code/bac%20a%20sable/test%20github/src/github_async.py)
   Client GitHub async mutualise, retries, cache du token d'installation.
 - [api_db.py](file:///Users/user/code/bac%20a%20sable/test%20github/src/api_db.py)
-  Bootstrap SQLAlchemy async, support SQLite/PostgreSQL.
+  Bootstrap SQLAlchemy async, validation du schema, support SQLite/PostgreSQL.
 - [api_models.py](file:///Users/user/code/bac%20a%20sable/test%20github/src/api_models.py)
   Table `operations` pour la tracabilite.
+- [migrations.py](file:///Users/user/code/bac%20a%20sable/test%20github/src/migrations.py)
+  Adaptateur Alembic utilise par `init-db` et `db-current`.
 - [server.py](file:///Users/user/code/bac%20a%20sable/test%20github/src/server.py)
-  Entree `serve` et `init-db`.
+  Entree `serve`, `init-db` et `db-current`.
 
 ## Flux d'execution
 
 1. Une requete HTTP arrive avec un Bearer token interne.
 2. L'endpoint valide le payload.
-3. En mode `sql`, une operation est ecrite en base puis executee en `wait=true` ou en queue.
+3. En mode `sql`, les migrations Alembic posent le schema puis une operation est ecrite en base et executee en `wait=true` ou en queue.
 4. En mode `none`, aucune operation n'est persistee et `wait=true` devient obligatoire.
 5. Un worker async appelle GitHub via le client mutualise.
 6. En mode `sql`, le resultat est consultable via `/v1/operations/{id}`.
@@ -90,6 +107,58 @@ En pratique :
   `Metadata: Read`
 - Python et un virtualenv
 
+## Configurer la GitHub App
+
+### Liens officiels
+
+- creation et enregistrement : [Registering a GitHub App](https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/registering-a-github-app)
+- creation detaillee : [Creating a GitHub App](https://docs.github.com/en/apps/creating-github-apps/setting-up-a-github-app/creating-a-github-app)
+- choix des permissions : [Choosing permissions for a GitHub App](https://docs.github.com/en/apps/creating-github-apps/setting-up-a-github-app/choosing-permissions-for-a-github-app)
+- installation sur un compte ou une organisation : [Installing your own GitHub App](https://docs.github.com/en/apps/using-github-apps/installing-your-own-github-app)
+
+### Liens directs GitHub
+
+- app personnelle : [github.com/settings/apps/new](https://github.com/settings/apps/new)
+- app d'organisation : `https://github.com/organizations/<your-org>/settings/apps/new`
+
+### Parametres recommandes
+
+- **GitHub App name** : un nom globalement unique, court et explicite
+- **Homepage URL** : l'URL du projet ou de la doc interne
+- **Webhook** : desactive si tu utilises seulement l'API sortante ; active-le uniquement si tu implementes une reception serveur et un secret de webhook
+- **Where can this GitHub App be installed?** : prefere `Only on this account` pour reduire la surface d'exposition
+
+### Permissions minimales pour `gitpilot`
+
+- **Repository permissions**
+- `Contents: Read and write`
+- `Administration: Read and write`
+- `Metadata: Read-only`
+- `Workflows: Read and write` seulement si tu dois modifier des fichiers dans `.github/workflows/`
+
+Pourquoi :
+
+- `Contents` est requis pour lire et pousser des fichiers
+- `Administration` est requis pour les operations de creation et suppression de repositories
+- `Metadata` est necessaire pour la lecture des metadonnees de repo et est couramment requise comme permission de base
+- `Workflows` est optionnel et ne doit pas etre demande si tu ne modifies jamais les workflows GitHub Actions
+
+### Installation recommandee
+
+1. Cree la GitHub App via l'interface GitHub ou les liens ci-dessus.
+2. Genere la cle privee PEM depuis la page de l'app.
+3. Installe l'app sur le compte cible.
+4. Choisis `Only select repositories` si tu veux limiter la surface d'acces.
+5. Si `gitpilot` cree de nouveaux repositories, GitHub leur accordera automatiquement l'acces a l'app une fois crees.
+6. Recupere `App ID` et `Installation ID`, puis renseigne les variables dans `.env`.
+
+### Valeurs a recuperer pour `.env`
+
+- `GITHUB_APP_ID` : visible dans la page de settings de la GitHub App
+- `GITHUB_PRIVATE_KEY` : contenu PEM de la cle privee telechargee
+- `GITHUB_INSTALLATION_ID` : visible apres installation ou via la commande `github-api whoami`
+- `GITHUB_ORGANIZATION` : optionnel ; utile si tu veux un owner par defaut cote API
+
 ## Configuration
 
 Copier le modele :
@@ -104,7 +173,7 @@ Variables principales :
 GITHUB_APP_ID=4248933
 GITHUB_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----\n...\n-----END RSA PRIVATE KEY-----"
 GITHUB_INSTALLATION_ID=146737430
-GITHUB_ORGANIZATION=orvyx
+GITHUB_ORGANIZATION=your-org
 
 API_AUTH_TOKEN=replace-with-a-long-random-secret
 STATE_BACKEND=sql
@@ -160,6 +229,28 @@ Dans ce mode :
 - `/v1/operations` et `/v1/operations/{id}` sont indisponibles
 - `init-db` devient un no-op
 
+## Migrations Alembic
+
+Le schema SQL n'est plus cree implicitement au boot de l'API.
+
+Choix de stabilite :
+
+- source de verite unique du schema via Alembic
+- fail-fast au demarrage si le schema n'est pas applique
+- meme flux pour dev, tests, Docker et prod
+
+Commandes utiles :
+
+```bash
+# Appliquer toutes les migrations
+.venv/bin/python -m src.server init-db
+
+# Voir la revision courante
+.venv/bin/python -m src.server db-current
+```
+
+En mode `STATE_BACKEND=sql`, lance toujours `init-db` avant `serve`.
+
 ## Installation locale
 
 ```bash
@@ -177,6 +268,12 @@ Uniquement utile si `STATE_BACKEND=sql`.
 
 ```bash
 .venv/bin/python -m src.server init-db
+```
+
+Verifier la revision :
+
+```bash
+.venv/bin/python -m src.server db-current
 ```
 
 ## Lancer le serveur
@@ -223,7 +320,7 @@ Run :
 docker run --rm -p 8000:8000 \
   -e GITHUB_APP_ID=4248933 \
   -e GITHUB_INSTALLATION_ID=146737430 \
-  -e GITHUB_ORGANIZATION=orvyx \
+  -e GITHUB_ORGANIZATION=your-org \
   -e GITHUB_PRIVATE_KEY="$(python3 - <<'PY'
 from pathlib import Path
 from src.config import _parse_env
@@ -290,6 +387,7 @@ export API_TOKEN="change-me"
 - `GET /readyz`
 - `GET /v1/owners/{owner}/repos?owner_type=auto`
 - `GET /v1/orgs/{org}/repos?limit=30`
+- `GET /v1/users/{user}/repos?limit=30`
 - `GET /v1/operations?limit=100`
 - `GET /v1/operations/{operation_id}`
 
@@ -308,7 +406,15 @@ export API_TOKEN="change-me"
 ```bash
 curl -s \
   -H "Authorization: Bearer $API_TOKEN" \
-  "$API_URL/v1/owners/orvyx/repos?owner_type=org&limit=10"
+  "$API_URL/v1/owners/your-org/repos?owner_type=org&limit=10"
+```
+
+Alias user explicite :
+
+```bash
+curl -s \
+  -H "Authorization: Bearer $API_TOKEN" \
+  "$API_URL/v1/users/hackville254/repos?limit=10"
 ```
 
 ### Creer un repo
@@ -321,7 +427,7 @@ curl -s -X POST \
   -H "Content-Type: application/json" \
   "$API_URL/v1/repos" \
   -d '{
-    "owner": "orvyx",
+    "owner": "your-org",
     "owner_type": "org",
     "name": "demo-fastapi",
     "description": "repo cree par API",
@@ -350,7 +456,7 @@ curl -s -X POST \
 ```bash
 curl -s -X DELETE \
   -H "Authorization: Bearer $API_TOKEN" \
-  "$API_URL/v1/repos/orvyx/demo-fastapi?wait=true"
+  "$API_URL/v1/repos/your-org/demo-fastapi?wait=true"
 ```
 
 ### Creer une branche
@@ -359,7 +465,7 @@ curl -s -X DELETE \
 curl -s -X POST \
   -H "Authorization: Bearer $API_TOKEN" \
   -H "Content-Type: application/json" \
-  "$API_URL/v1/repos/orvyx/demo-live-action/branches" \
+  "$API_URL/v1/repos/your-org/demo-live-action/branches" \
   -d '{
     "branch": "feat/api",
     "from_branch": "main",
@@ -373,7 +479,7 @@ curl -s -X POST \
 curl -s -X POST \
   -H "Authorization: Bearer $API_TOKEN" \
   -H "Content-Type: application/json" \
-  "$API_URL/v1/repos/orvyx/demo-live-action/files" \
+  "$API_URL/v1/repos/your-org/demo-live-action/files" \
   -d '{
     "branch": "feat/api",
     "path": "README.md",
@@ -389,7 +495,7 @@ curl -s -X POST \
 curl -s -X POST \
   -H "Authorization: Bearer $API_TOKEN" \
   -H "Content-Type: application/json" \
-  "$API_URL/v1/repos/orvyx/demo-live-action/files/batch" \
+  "$API_URL/v1/repos/your-org/demo-live-action/files/batch" \
   -d '{
     "branch": "feat/api",
     "message": "feat: batch push",
@@ -447,10 +553,11 @@ En mode `STATE_BACKEND=none`, ce modele n'est pas persiste et les routes
 .venv/bin/python tests/stateless_api_smoke_test.py
 ```
 
-### Init schema manuelle
+### Migrations manuelles
 
 ```bash
 .venv/bin/python -m src.server init-db
+.venv/bin/python -m src.server db-current
 ```
 
 ### Lancer en local avec SQLite
@@ -476,9 +583,16 @@ DATABASE_URL=sqlite:///./github_api.db \
 │   ├── client.py
 │   ├── config.py
 │   ├── github_async.py
+│   ├── migrations.py
 │   ├── server.py
 │   └── ...
+├── migrations/
+│   ├── env.py
+│   └── versions/
+├── docs/
+│   └── assets/
 ├── tests/
+├── alembic.ini
 ├── Dockerfile
 ├── entrypoint.sh
 ├── requirements.txt
@@ -493,6 +607,7 @@ DATABASE_URL=sqlite:///./github_api.db \
 - evite de mettre des valeurs trop agressives sur `QUEUE_WORKERS` sans mesurer
 - GitHub reste le systeme le plus lent du flux, pas FastAPI
 - si tu exposes l'API hors reseau interne, ajoute une couche reverse proxy + TLS + rate limiting
+- garde Alembic comme source unique du schema et evite tout `create_all()` implicite en production
 
 ## Contribution
 

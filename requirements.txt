@@ -3,6 +3,7 @@ fastapi>=0.116.0
 uvicorn[standard]>=0.35.0
 httpx>=0.28.0
 SQLAlchemy[asyncio]>=2.0.0
+alembic>=1.16.0
 aiosqlite>=0.20.0
 asyncpg>=0.30.0
 PyJWT[crypto]>=2.8.0

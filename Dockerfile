@@ -38,8 +38,10 @@ COPY --from=deps /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.
 COPY --from=deps /usr/local/bin /usr/local/bin
 COPY --from=deps /usr/bin/tini /usr/bin/tini
 
-# Copy only the application source.
+# Copy only the runtime assets needed by the service and migrations.
 COPY src/ ./src/
+COPY migrations/ ./migrations/
+COPY alembic.ini ./alembic.ini
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 
 RUN chmod 0755 /usr/local/bin/entrypoint.sh \

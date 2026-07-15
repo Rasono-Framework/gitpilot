@@ -14,6 +14,9 @@ sys.path.insert(0, str(PROJECT_ROOT))
 os.environ.setdefault("API_AUTH_TOKEN", "test-api-token")
 os.environ.setdefault("STATE_BACKEND", "none")
 os.environ.setdefault("GITHUB_ORGANIZATION", "")
+os.environ.setdefault("GITHUB_APP_ID", "test-app-id")
+os.environ.setdefault("GITHUB_PRIVATE_KEY", "-----BEGIN RSA PRIVATE KEY-----\nTEST\n-----END RSA PRIVATE KEY-----")
+os.environ.setdefault("GITHUB_INSTALLATION_ID", "123456")
 
 from src.api_app import create_app  # noqa: E402
 from src.api_service import GitHubOperationService  # noqa: E402
